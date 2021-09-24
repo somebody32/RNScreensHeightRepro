@@ -4,13 +4,48 @@ import React, {
   useCallback,
   useState,
   useLayoutEffect,
+  useEffect,
 } from 'react';
-import {View, StyleSheet, Pressable} from 'react-native';
+import {View, StyleSheet, Pressable, Dimensions} from 'react-native';
 import {NavigationContainer, useFocusEffect} from '@react-navigation/native';
-import {createNativeStackNavigator} from 'react-native-screens/native-stack';
-import BottomSheet from '@gorhom/bottom-sheet';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {createStackNavigator} from '@react-navigation/stack';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import 'react-native-gesture-handler';
+
 function ScreenOne({navigation, setBottomSheetHeight}) {
+  const isFocused = useRef(true);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('transitionEnd', e => {
+      if (isFocused.current) {
+        setBottomSheetHeight(400);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, setBottomSheetHeight]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', e => {
+      isFocused.current = true;
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', e => {
+      isFocused.current = false;
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   useFocusEffect(
     useCallback(() => {
       setBottomSheetHeight(400);
@@ -43,21 +78,28 @@ function ScreenTwo({navigation, setBottomSheetHeight}) {
 }
 
 const Stack = createNativeStackNavigator();
+const {height: SCREEN_HEIGHT} = Dimensions.get('screen');
 
 export default function App() {
-  const [height, setHeight] = useState(0);
-  const bottomSheetRef = useRef(null);
-  const snapPoints = useMemo(() => [0, height], [height]);
+  const height = useSharedValue(0);
+  const top = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {height: height.value, top: top.value};
+  });
+
+  const setHeight = value => {
+    height.value = withTiming(value);
+    top.value = withTiming(SCREEN_HEIGHT - value);
+  };
 
   return (
     <View style={styles.container}>
-      <BottomSheet
-        animateOnMount
-        ref={bottomSheetRef}
-        index={1}
-        snapPoints={snapPoints}>
+      <Animated.View style={[styles.sheet, animatedStyle]}>
         <NavigationContainer>
-          <Stack.Navigator screenOptions={{stackAnimation: 'simple_push'}}>
+          <Stack.Navigator
+            screenOptions={{stackAnimation: 'simple_push'}}
+            initialRouteName="Screen One">
             <Stack.Screen name="Screen One">
               {screenProps => {
                 return (
@@ -80,7 +122,7 @@ export default function App() {
             </Stack.Screen>
           </Stack.Navigator>
         </NavigationContainer>
-      </BottomSheet>
+      </Animated.View>
     </View>
   );
 }
@@ -88,8 +130,10 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     backgroundColor: '#ecf0f1',
-    padding: 8,
+  },
+  sheet: {
+    position: 'absolute',
+    width: '100%',
   },
 });
